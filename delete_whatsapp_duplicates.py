@@ -4,6 +4,11 @@ Immich WhatsApp Duplicate Cleaner
 
 This script identifies and deletes duplicate images from WhatsApp folders in Immich.
 It keeps the original image and deletes the WhatsApp version when duplicates are found.
+
+Safety features:
+- Only deletes WhatsApp versions when non-WhatsApp originals exist
+- Only deletes WhatsApp versions that are smaller (compressed) than originals
+- Runs in dry-run mode by default
 """
 
 import json
@@ -57,6 +62,18 @@ class ImmichAPI:
             return False
 
 
+def format_file_size(size_bytes: int) -> str:
+    """Format file size in human readable format"""
+    if size_bytes == 0:
+        return "0 B"
+    
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB"
+
+
 def is_whatsapp_asset(asset: Dict[str, Any]) -> bool:
     """Check if an asset is from WhatsApp based on path or filename"""
     original_path = asset.get('originalPath', '').lower()
@@ -99,13 +116,36 @@ def find_whatsapp_duplicates_to_delete(duplicates: List[Dict[str, Any]]) -> List
                 non_whatsapp_assets.append(asset)
         
         # Only delete WhatsApp assets if there are non-WhatsApp versions available
+        # AND the WhatsApp version is smaller (compressed)
         if whatsapp_assets and non_whatsapp_assets:
             for wa_asset in whatsapp_assets:
-                assets_to_delete.append(wa_asset['id'])
-                print(f"  📱 WhatsApp duplicate: {wa_asset['originalFileName']}")
-                print(f"     Path: {wa_asset['originalPath']}")
-                print(f"     ID: {wa_asset['id']}")
-                print()
+                wa_file_size = wa_asset.get('exifInfo', {}).get('fileSizeInByte', 0)
+                
+                # Check if any non-WhatsApp version is larger
+                has_larger_original = False
+                largest_original_size = 0
+                largest_original_name = ""
+                
+                for orig_asset in non_whatsapp_assets:
+                    orig_file_size = orig_asset.get('exifInfo', {}).get('fileSizeInByte', 0)
+                    if orig_file_size > wa_file_size:
+                        has_larger_original = True
+                        if orig_file_size > largest_original_size:
+                            largest_original_size = orig_file_size
+                            largest_original_name = orig_asset['originalFileName']
+                
+                if has_larger_original:
+                    assets_to_delete.append(wa_asset['id'])
+                    print(f"  📱 WhatsApp duplicate: {wa_asset['originalFileName']}")
+                    print(f"     Path: {wa_asset['originalPath']}")
+                    print(f"     Size: {format_file_size(wa_file_size)} (compressed)")
+                    print(f"     Original: {largest_original_name} ({format_file_size(largest_original_size)})")
+                    print(f"     ID: {wa_asset['id']}")
+                    print()
+                else:
+                    print(f"  ⚠️  Skipping: {wa_asset['originalFileName']}")
+                    print(f"     Reason: WhatsApp version ({format_file_size(wa_file_size)}) is not smaller than original")
+                    print()
                 
     if assets_to_delete:
         print(f"\n{'='*60}")

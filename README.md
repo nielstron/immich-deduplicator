@@ -58,6 +58,7 @@ The script can also fetch duplicates directly from your Immich instance (comment
 ## Safety Features
 
 - **Dry run by default**: The script will only show what would be deleted unless you set `DRY_RUN=false`
+- **File size comparison**: Only deletes WhatsApp versions that are smaller (compressed) than their originals
 - **Confirmation prompt**: When not in dry run mode, asks for confirmation before deleting
 - **Batch processing**: Deletes files in batches to avoid overwhelming the API
 - **Conservative logic**: Only deletes WhatsApp versions when non-WhatsApp versions exist
@@ -82,6 +83,8 @@ Dry run mode: ENABLED
 Analyzing duplicates for WhatsApp versions...
   📱 WhatsApp duplicate: IMG-20231014-WA0013.jpg
      Path: /path/to/whatsapp/sent/IMG-20231014-WA0013.jpg
+     Size: 377.8 KB (compressed)
+     Original: PXL_20231014_171942197.jpg (3.1 MB)
      ID: a010301e-9ed9-4183-8fc3-05a273d27289
 
 ============================================================
