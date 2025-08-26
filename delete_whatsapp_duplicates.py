@@ -148,7 +148,7 @@ def is_whatsapp_asset(asset: Dict[str, Any]) -> bool:
     
     # Check for common WhatsApp patterns
     whatsapp_indicators = [
-        'whatsapp',
+        'whatsapp images',
         #'wa0',
         '/sent/',
         #'img-', 
@@ -160,13 +160,17 @@ def is_whatsapp_asset(asset: Dict[str, Any]) -> bool:
     return any(indicator in path_and_filename for indicator in whatsapp_indicators)
 
 
-def find_whatsapp_duplicates_to_delete(duplicates: List[Dict[str, Any]]) -> List[str]:
+def find_whatsapp_duplicates_to_delete(duplicates: List[Dict[str, Any]]) -> tuple[List[str], Dict[str, int]]:
     """
     Identify WhatsApp duplicates to delete.
     For each duplicate group, if there's a WhatsApp version and a non-WhatsApp version,
     mark the WhatsApp version for deletion.
+    
+    Returns:
+        Tuple of (asset_ids_to_delete, path_summary)
     """
     assets_to_delete = []
+    path_summary = {}
     
     for duplicate_group in duplicates:
         assets = duplicate_group.get('assets', [])
@@ -203,6 +207,11 @@ def find_whatsapp_duplicates_to_delete(duplicates: List[Dict[str, Any]]) -> List
                 
                 if has_larger_original:
                     assets_to_delete.append(wa_asset['id'])
+                    
+                    # Track path for summary
+                    dir_path = os.path.dirname(wa_asset['originalPath'])
+                    path_summary[dir_path] = path_summary.get(dir_path, 0) + 1
+                    
                     print(f"  📱 WhatsApp duplicate: {wa_asset['originalFileName']}")
                     print(f"     Path: {wa_asset['originalPath']}")
                     print(f"     Size: {format_file_size(wa_file_size)} (compressed)")
@@ -218,8 +227,16 @@ def find_whatsapp_duplicates_to_delete(duplicates: List[Dict[str, Any]]) -> List
         print(f"\n{'='*60}")
         print(f"SUMMARY: Found {len(assets_to_delete)} WhatsApp duplicates to delete")
         print(f"{'='*60}")
+        
+        print(f"\n📁 Files to be deleted by path:")
+        # Sort paths by number of files (most first)
+        for path, count in sorted(path_summary.items(), key=lambda x: x[1], reverse=True):
+            print(f"  {count:4d} files from: {path}")
+        
+        print(f"\n🗂️  Total paths affected: {len(path_summary)}")
+        print(f"{'='*60}")
     
-    return assets_to_delete
+    return assets_to_delete, path_summary
 
 
 def load_duplicates_from_file(filename: str) -> List[Dict[str, Any]]:
@@ -283,7 +300,7 @@ def main():
     
     # Find WhatsApp duplicates to delete
     print("Analyzing duplicates for WhatsApp versions...")
-    assets_to_delete = find_whatsapp_duplicates_to_delete(duplicates)
+    assets_to_delete, path_summary = find_whatsapp_duplicates_to_delete(duplicates)
     
     if not assets_to_delete:
         print("\nNo WhatsApp duplicates found that have non-WhatsApp alternatives")
@@ -305,7 +322,7 @@ def main():
         api = ImmichAPI(IMMICH_BASE_URL, IMMICH_API_KEY)
         
         # Delete in batches to avoid overwhelming the API
-        batch_size = 50
+        batch_size = 500
         total_deleted = 0
         
         for i in range(0, len(assets_to_delete), batch_size):
