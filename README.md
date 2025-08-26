@@ -7,6 +7,7 @@ A Python script to automatically identify and delete WhatsApp duplicate images i
 - 🔍 Identifies duplicate images where one version is from WhatsApp and another is the original
 - 🛡️ **Safe by default** - runs in dry-run mode to show what would be deleted
 - 📱 Detects WhatsApp images by path patterns (`whatsapp`, `sent`, `wa0`, etc.)
+- 🚀 **Smart caching** - caches API responses for 24 hours to avoid slow repeated calls
 - 🔄 Can work with existing `duplicates.json` file or fetch directly from Immich API
 - ⚡ Batch deletion for better performance
 
@@ -31,6 +32,8 @@ IMMICH_BASE_URL=http://localhost:2283
 IMMICH_API_KEY=your-api-key-here
 DUPLICATES_FILE=duplicates.json
 DRY_RUN=true
+USE_API=true
+FORCE_REFRESH=false
 ```
 
 ### Getting your Immich API Key
@@ -43,17 +46,35 @@ DRY_RUN=true
 
 ## Usage
 
-### Method 1: Using existing duplicates.json file
-
-If you already have a `duplicates.json` file from Immich's duplicate detection:
+### Basic Usage
 
 ```bash
+# Run with cached data (default behavior)
 python delete_whatsapp_duplicates.py
+
+# Force refresh from API (ignores 24-hour cache)
+python delete_whatsapp_duplicates.py --refresh
+
+# Use local file only (don't use API)
+python delete_whatsapp_duplicates.py --no-api
+
+# Actually delete files (disable dry-run)
+python delete_whatsapp_duplicates.py --execute
 ```
 
-### Method 2: Fetch duplicates from API
+### Caching Behavior
 
-The script can also fetch duplicates directly from your Immich instance (commented out by default).
+The script uses intelligent caching to speed up repeated runs:
+
+- **First run**: Fetches duplicates from Immich API and saves to `duplicates.json`
+- **Subsequent runs**: Uses cached data if less than 24 hours old
+- **Cache refresh**: Automatically refreshes cache after 24 hours or use `--refresh`
+
+### Configuration Options
+
+- `USE_API=true`: Use Immich API with caching (default)
+- `USE_API=false`: Use local `duplicates.json` file only
+- `FORCE_REFRESH=true`: Always fetch fresh data from API
 
 ## Safety Features
 

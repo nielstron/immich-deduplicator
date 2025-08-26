@@ -15,6 +15,9 @@ import json
 import requests
 import sys
 import os
+import time
+import argparse
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
@@ -26,23 +29,87 @@ except ImportError:
 
 
 class ImmichAPI:
-    def __init__(self, base_url: str, api_key: str):
+    def __init__(self, base_url: str, api_key: str, cache_file: str = "duplicates.json"):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
+        self.cache_file = cache_file
         self.headers = {
             'X-API-Key': api_key,
             'Content-Type': 'application/json'
         }
 
-    def get_asset_duplicates(self) -> List[Dict[str, Any]]:
-        """Fetch duplicate assets from Immich API"""
-        url = f"{self.base_url}/api/duplicates"
-        response = requests.get(url, headers=self.headers)
+    def _is_cache_valid(self, max_age_hours: int = 24) -> bool:
+        """Check if cache file exists and is not older than max_age_hours"""
+        if not os.path.exists(self.cache_file):
+            return False
         
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"Error fetching duplicates: {response.status_code} - {response.text}")
+        cache_stat = os.stat(self.cache_file)
+        cache_age = datetime.now() - datetime.fromtimestamp(cache_stat.st_mtime)
+        return cache_age < timedelta(hours=max_age_hours)
+
+    def _save_cache(self, data: List[Dict[str, Any]]) -> None:
+        """Save duplicates data to cache file"""
+        try:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=None, separators=(',', ':'))
+            print(f"✅ Cached duplicates data to {self.cache_file}")
+        except Exception as e:
+            print(f"Warning: Failed to save cache: {e}")
+
+    def _load_cache(self) -> List[Dict[str, Any]]:
+        """Load duplicates data from cache file"""
+        try:
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Warning: Failed to load cache: {e}")
+            return []
+
+    def get_asset_duplicates(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """
+        Fetch duplicate assets from Immich API with caching
+        
+        Args:
+            force_refresh: If True, bypass cache and fetch fresh data
+        """
+        # Check if we can use cached data
+        if not force_refresh and self._is_cache_valid():
+            cache_stat = os.stat(self.cache_file)
+            cache_time = datetime.fromtimestamp(cache_stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            print(f"📁 Using cached duplicates data from {cache_time}")
+            return self._load_cache()
+        
+        # Fetch fresh data from API
+        print("🔄 Fetching duplicates from Immich API...")
+        url = f"{self.base_url}/api/duplicates"
+        
+        try:
+            response = requests.get(url, headers=self.headers, timeout=300)  # 5 min timeout
+            
+            if response.status_code == 200:
+                data = response.json()
+                self._save_cache(data)
+                return data
+            else:
+                print(f"Error fetching duplicates: {response.status_code} - {response.text}")
+                
+                # Fall back to cache if API fails and cache exists
+                if os.path.exists(self.cache_file):
+                    print(f"⚠️ API failed, falling back to cached data")
+                    return self._load_cache()
+                return []
+                
+        except requests.exceptions.Timeout:
+            print("⏱️ API request timed out (5 minutes)")
+            if os.path.exists(self.cache_file):
+                print(f"⚠️ Falling back to cached data")
+                return self._load_cache()
+            return []
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Network error: {e}")
+            if os.path.exists(self.cache_file):
+                print(f"⚠️ Falling back to cached data")
+                return self._load_cache()
             return []
 
     def delete_assets(self, asset_ids: List[str]) -> bool:
@@ -82,10 +149,10 @@ def is_whatsapp_asset(asset: Dict[str, Any]) -> bool:
     # Check for common WhatsApp patterns
     whatsapp_indicators = [
         'whatsapp',
-        'wa0',
+        #'wa0',
         '/sent/',
-        'img-', 
-        '-wa0'
+        #'img-', 
+        #'-wa0'
     ]
     
     path_and_filename = f"{original_path} {original_filename}".lower()
@@ -169,28 +236,42 @@ def load_duplicates_from_file(filename: str) -> List[Dict[str, Any]]:
 
 
 def main():
-    # Configuration from environment variables or .env file
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Clean WhatsApp duplicate images from Immich')
+    parser.add_argument('--refresh', action='store_true', 
+                       help='Force refresh duplicates from API (ignore cache)')
+    parser.add_argument('--no-api', action='store_true', 
+                       help='Use local duplicates.json file only (don\'t use API)')
+    parser.add_argument('--execute', action='store_true', 
+                       help='Actually delete files (disable dry-run mode)')
+    args = parser.parse_args()
+    
+    # Configuration from environment variables or .env file, with CLI overrides
     IMMICH_BASE_URL = os.getenv('IMMICH_BASE_URL', 'http://localhost:2283')
     IMMICH_API_KEY = os.getenv('IMMICH_API_KEY', '')
     DUPLICATES_FILE = os.getenv('DUPLICATES_FILE', 'duplicates.json')
-    DRY_RUN = os.getenv('DRY_RUN', 'true').lower() in ('true', '1', 'yes')
-    
-    # Validate required configuration
-    if not IMMICH_API_KEY:
-        print("Error: IMMICH_API_KEY is required. Set it in .env file or as environment variable.")
-        return
+    DRY_RUN = not args.execute and os.getenv('DRY_RUN', 'true').lower() in ('true', '1', 'yes')
+    FORCE_REFRESH = args.refresh or os.getenv('FORCE_REFRESH', 'false').lower() in ('true', '1', 'yes')
+    USE_API = not args.no_api and os.getenv('USE_API', 'true').lower() in ('true', '1', 'yes')
     
     print("Immich WhatsApp Duplicate Cleaner")
     print("=" * 40)
     
-    # Option 1: Load from API
-    # api = ImmichAPI(IMMICH_BASE_URL, IMMICH_API_KEY)
-    # print("Fetching duplicates from Immich API...")
-    # duplicates = api.get_asset_duplicates()
-    
-    # Option 2: Load from file (current approach)
-    print(f"Loading duplicates from {DUPLICATES_FILE}...")
-    duplicates = load_duplicates_from_file(DUPLICATES_FILE)
+    # Load duplicates data
+    if USE_API:
+        # Validate required configuration for API usage
+        if not IMMICH_API_KEY:
+            print("Error: IMMICH_API_KEY is required when USE_API=true.")
+            print("Set it in .env file or set USE_API=false to use local file only.")
+            return
+        
+        # Use API with caching
+        api = ImmichAPI(IMMICH_BASE_URL, IMMICH_API_KEY, DUPLICATES_FILE)
+        duplicates = api.get_asset_duplicates(force_refresh=FORCE_REFRESH)
+    else:
+        # Load from file only (fallback mode)
+        print(f"Loading duplicates from {DUPLICATES_FILE}...")
+        duplicates = load_duplicates_from_file(DUPLICATES_FILE)
     
     if not duplicates:
         print("No duplicates found or error loading data")
