@@ -1,15 +1,12 @@
 # Immich WhatsApp Duplicate Cleaner
 
-A Python script to automatically identify and delete WhatsApp duplicate images in your Immich photo library. The script keeps the original high-quality image and removes the compressed WhatsApp version.
+A Python script to automatically identify and delete duplicate images in your Immich photo library.
 
-## Features
+The script is designed to run in bulk and delete everything following some simple rules. So far, the only implemented rule is to delete WhatsApp images that are detected as duplicates (i.e., when sent). The script keeps the original high-quality image and removes the compressed WhatsApp version.
 
-- 🔍 Identifies duplicate images where one version is from WhatsApp and another is the original
-- 🛡️ **Safe by default** - runs in dry-run mode to show what would be deleted
-- 📱 Detects WhatsApp images by path patterns (`whatsapp`, `sent`, `wa0`, etc.)
-- 🚀 **Smart caching** - caches API responses for 24 hours to avoid slow repeated calls
-- 🔄 Can work with existing `duplicates.json` file or fetch directly from Immich API
-- ⚡ Batch deletion for better performance
+
+The script is **Safe by default** - runs in dry-run mode to show what would be deleted.
+Since the duplicates endpoint is usually slow, it by default caches the response for 24 hours.
 
 ## Installation
 
@@ -36,20 +33,12 @@ USE_API=true
 FORCE_REFRESH=false
 ```
 
-### Getting your Immich API Key
-
-1. Log into your Immich web interface
-2. Go to Account Settings (top right profile icon)
-3. Navigate to "API Keys" section
-4. Click "New API Key" 
-5. Give it a name and copy the generated key
-
 ## Usage
 
 ### Basic Usage
 
 ```bash
-# Run with cached data (default behavior)
+# Run using env config (default behavior)
 python delete_whatsapp_duplicates.py
 
 # Force refresh from API (ignores 24-hour cache)
@@ -64,33 +53,17 @@ python delete_whatsapp_duplicates.py --execute
 
 ### Caching Behavior
 
-The script uses intelligent caching to speed up repeated runs:
+The script uses caching to speed up repeated runs:
 
-- **First run**: Fetches duplicates from Immich API and saves to `duplicates.json`
+- **First run**: Fetches duplicates from Immich API and saves to `$DUPLICATES_FILE`
 - **Subsequent runs**: Uses cached data if less than 24 hours old
 - **Cache refresh**: Automatically refreshes cache after 24 hours or use `--refresh`
-
-### Configuration Options
-
-- `USE_API=true`: Use Immich API with caching (default)
-- `USE_API=false`: Use local `duplicates.json` file only
-- `FORCE_REFRESH=true`: Always fetch fresh data from API
-
-## Safety Features
-
-- **Dry run by default**: The script will only show what would be deleted unless you set `DRY_RUN=false`
-- **File size comparison**: Only deletes WhatsApp versions that are smaller (compressed) than their originals
-- **Confirmation prompt**: When not in dry run mode, asks for confirmation before deleting
-- **Batch processing**: Deletes files in batches to avoid overwhelming the API
-- **Conservative logic**: Only deletes WhatsApp versions when non-WhatsApp versions exist
 
 ## What gets detected as WhatsApp?
 
 The script identifies WhatsApp images by looking for these patterns in file paths and names:
-- `whatsapp` (case insensitive)
-- `wa0` (WhatsApp file naming pattern)
+- `whatsapp images` (case insensitive)
 - `/sent/` (WhatsApp sent folder)
-- `img-` followed by `wa` (WhatsApp image naming)
 
 ## Example Output
 

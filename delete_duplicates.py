@@ -17,6 +17,7 @@ import sys
 import os
 import time
 import argparse
+import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -25,7 +26,7 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    print("Warning: python-dotenv not installed. Using environment variables only.")
+    logging.info("Warning: python-dotenv not installed. Using environment variables only.")
 
 
 class ImmichAPI:
@@ -52,9 +53,9 @@ class ImmichAPI:
         try:
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=None, separators=(',', ':'))
-            print(f"✅ Cached duplicates data to {self.cache_file}")
+            logging.info(f"✅ Cached duplicates data to {self.cache_file}")
         except Exception as e:
-            print(f"Warning: Failed to save cache: {e}")
+            logging.info(f"Warning: Failed to save cache: {e}")
 
     def _load_cache(self) -> List[Dict[str, Any]]:
         """Load duplicates data from cache file"""
@@ -62,7 +63,7 @@ class ImmichAPI:
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Warning: Failed to load cache: {e}")
+            logging.info(f"Warning: Failed to load cache: {e}")
             return []
 
     def get_asset_duplicates(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
@@ -76,11 +77,11 @@ class ImmichAPI:
         if not force_refresh and self._is_cache_valid():
             cache_stat = os.stat(self.cache_file)
             cache_time = datetime.fromtimestamp(cache_stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-            print(f"📁 Using cached duplicates data from {cache_time}")
+            logging.info(f"📁 Using cached duplicates data from {cache_time}")
             return self._load_cache()
         
         # Fetch fresh data from API
-        print("🔄 Fetching duplicates from Immich API...")
+        logging.info("🔄 Fetching duplicates from Immich API...")
         url = f"{self.base_url}/api/duplicates"
         
         try:
@@ -91,24 +92,24 @@ class ImmichAPI:
                 self._save_cache(data)
                 return data
             else:
-                print(f"Error fetching duplicates: {response.status_code} - {response.text}")
+                logging.info(f"Error fetching duplicates: {response.status_code} - {response.text}")
                 
                 # Fall back to cache if API fails and cache exists
                 if os.path.exists(self.cache_file):
-                    print(f"⚠️ API failed, falling back to cached data")
+                    logging.info(f"⚠️ API failed, falling back to cached data")
                     return self._load_cache()
                 return []
                 
         except requests.exceptions.Timeout:
-            print("⏱️ API request timed out (5 minutes)")
+            logging.info("⏱️ API request timed out (5 minutes)")
             if os.path.exists(self.cache_file):
-                print(f"⚠️ Falling back to cached data")
+                logging.info(f"⚠️ Falling back to cached data")
                 return self._load_cache()
             return []
         except requests.exceptions.RequestException as e:
-            print(f"❌ Network error: {e}")
+            logging.info(f"❌ Network error: {e}")
             if os.path.exists(self.cache_file):
-                print(f"⚠️ Falling back to cached data")
+                logging.info(f"⚠️ Falling back to cached data")
                 return self._load_cache()
             return []
 
@@ -125,7 +126,7 @@ class ImmichAPI:
         if response.status_code == 204:
             return True
         else:
-            print(f"Error deleting assets: {response.status_code} - {response.text}")
+            logging.info(f"Error deleting assets: {response.status_code} - {response.text}")
             return False
 
 
@@ -212,31 +213,66 @@ def find_whatsapp_duplicates_to_delete(duplicates: List[Dict[str, Any]]) -> tupl
                     dir_path = os.path.dirname(wa_asset['originalPath'])
                     path_summary[dir_path] = path_summary.get(dir_path, 0) + 1
                     
-                    print(f"  📱 WhatsApp duplicate: {wa_asset['originalFileName']}")
-                    print(f"     Path: {wa_asset['originalPath']}")
-                    print(f"     Size: {format_file_size(wa_file_size)} (compressed)")
-                    print(f"     Original: {largest_original_name} ({format_file_size(largest_original_size)})")
-                    print(f"     ID: {wa_asset['id']}")
-                    print()
+                    logging.info(f"  📱 WhatsApp duplicate: {wa_asset['originalFileName']}")
+                    logging.info(f"     Path: {wa_asset['originalPath']}")
+                    logging.info(f"     Size: {format_file_size(wa_file_size)} (compressed)")
+                    logging.info(f"     Original: {largest_original_name} ({format_file_size(largest_original_size)})")
+                    logging.info(f"     ID: {wa_asset['id']}")
                 else:
-                    print(f"  ⚠️  Skipping: {wa_asset['originalFileName']}")
-                    print(f"     Reason: WhatsApp version ({format_file_size(wa_file_size)}) is not smaller than original")
-                    print()
+                    logging.info(f"  ⚠️  Skipping: {wa_asset['originalFileName']}")
+                    logging.info(f"     Reason: WhatsApp version ({format_file_size(wa_file_size)}) is not smaller than original")
                 
     if assets_to_delete:
-        print(f"\n{'='*60}")
-        print(f"SUMMARY: Found {len(assets_to_delete)} WhatsApp duplicates to delete")
-        print(f"{'='*60}")
+        logging.info(f"\n{'='*60}")
+        logging.info(f"SUMMARY: Found {len(assets_to_delete)} WhatsApp duplicates to delete")
+        logging.info(f"{'='*60}")
         
-        print(f"\n📁 Files to be deleted by path:")
+        logging.info(f"\n📁 Files to be deleted by path:")
         # Sort paths by number of files (most first)
         for path, count in sorted(path_summary.items(), key=lambda x: x[1], reverse=True):
-            print(f"  {count:4d} files from: {path}")
+            logging.info(f"  {count:4d} files from: {path}")
         
-        print(f"\n🗂️  Total paths affected: {len(path_summary)}")
-        print(f"{'='*60}")
+        logging.info(f"\n🗂️  Total paths affected: {len(path_summary)}")
+        logging.info(f"{'='*60}")
     
     return assets_to_delete, path_summary
+
+
+def setup_logging(log_level: str, log_file: str) -> None:
+    """Configure logging for the application"""
+    # Convert string level to logging constant
+    numeric_level = getattr(logging, log_level, logging.INFO)
+    
+    # Configure root logger
+    logging.basicConfig(
+        level=numeric_level,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[]
+    )
+    
+    # Add console handler (always present)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(numeric_level)
+    console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+    console_handler.setFormatter(console_formatter)
+    logging.getLogger().addHandler(console_handler)
+    
+    # Add file handler if specified
+    if log_file:
+        try:
+            # Ensure log directory exists
+            log_dir = os.path.dirname(log_file)
+            if log_dir and not os.path.exists(log_dir):
+                os.makedirs(log_dir, exist_ok=True)
+            
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(numeric_level)
+            file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            file_handler.setFormatter(file_formatter)
+            logging.getLogger().addHandler(file_handler)
+            logging.info(f"Logging to file: {log_file}")
+        except Exception as e:
+            logging.error(f"Failed to setup file logging: {e}")
 
 
 def load_duplicates_from_file(filename: str) -> List[Dict[str, Any]]:
@@ -245,10 +281,10 @@ def load_duplicates_from_file(filename: str) -> List[Dict[str, Any]]:
         with open(filename, 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
-        print(f"Error: File '{filename}' not found")
+        logging.info(f"Error: File '{filename}' not found")
         return []
     except json.JSONDecodeError as e:
-        print(f"Error parsing JSON file: {e}")
+        logging.info(f"Error parsing JSON file: {e}")
         return []
 
 
@@ -261,6 +297,8 @@ def main():
                        help='Use local duplicates.json file only (don\'t use API)')
     parser.add_argument('--execute', action='store_true', 
                        help='Actually delete files (disable dry-run mode)')
+    parser.add_argument('--skip-confirmation', action='store_true', 
+                       help='Skip user confirmation prompt (for automated execution)')
     args = parser.parse_args()
     
     # Configuration from environment variables or .env file, with CLI overrides
@@ -270,16 +308,23 @@ def main():
     DRY_RUN = not args.execute and os.getenv('DRY_RUN', 'true').lower() in ('true', '1', 'yes')
     FORCE_REFRESH = args.refresh or os.getenv('FORCE_REFRESH', 'false').lower() in ('true', '1', 'yes')
     USE_API = not args.no_api and os.getenv('USE_API', 'true').lower() in ('true', '1', 'yes')
+    SKIP_CONFIRMATION = args.skip_confirmation or os.getenv('SKIP_CONFIRMATION', 'false').lower() in ('true', '1', 'yes')
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+    LOG_FILE = os.getenv('LOG_FILE', '')
     
-    print("Immich WhatsApp Duplicate Cleaner")
-    print("=" * 40)
+    # Configure logging
+    setup_logging(LOG_LEVEL, LOG_FILE)
+    
+    logging.info("Immich WhatsApp Duplicate Cleaner started")
+    logging.info("Immich WhatsApp Duplicate Cleaner")
+    logging.info("=" * 40)
     
     # Load duplicates data
     if USE_API:
         # Validate required configuration for API usage
         if not IMMICH_API_KEY:
-            print("Error: IMMICH_API_KEY is required when USE_API=true.")
-            print("Set it in .env file or set USE_API=false to use local file only.")
+            logging.info("Error: IMMICH_API_KEY is required when USE_API=true.")
+            logging.info("Set it in .env file or set USE_API=false to use local file only.")
             return
         
         # Use API with caching
@@ -287,36 +332,45 @@ def main():
         duplicates = api.get_asset_duplicates(force_refresh=FORCE_REFRESH)
     else:
         # Load from file only (fallback mode)
-        print(f"Loading duplicates from {DUPLICATES_FILE}...")
+        logging.info(f"Loading duplicates from {DUPLICATES_FILE}...")
         duplicates = load_duplicates_from_file(DUPLICATES_FILE)
     
     if not duplicates:
-        print("No duplicates found or error loading data")
+        message = "No duplicates found or error loading data"
+        logging.info(message)
+        logging.warning(message)
         return
     
-    print(f"Found {len(duplicates)} duplicate groups")
-    print(f"Dry run mode: {'ENABLED' if DRY_RUN else 'DISABLED'}")
-    print()
+    logging.info(f"Found {len(duplicates)} duplicate groups")
+    dry_run_status = 'ENABLED' if DRY_RUN else 'DISABLED'
+    logging.info(f"Dry run mode: {dry_run_status}")
+    logging.info(f"Dry run mode: {dry_run_status}")
     
     # Find WhatsApp duplicates to delete
-    print("Analyzing duplicates for WhatsApp versions...")
+    logging.info("Analyzing duplicates for WhatsApp versions...")
     assets_to_delete, path_summary = find_whatsapp_duplicates_to_delete(duplicates)
     
     if not assets_to_delete:
-        print("\nNo WhatsApp duplicates found that have non-WhatsApp alternatives")
+        logging.info("No WhatsApp duplicates found that have non-WhatsApp alternatives")
+        logging.info(message)
         return
     
     if DRY_RUN:
-        print(f"\n🔍 DRY RUN MODE - No files will be deleted")
-        print(f"To actually delete files, set DRY_RUN=false in your .env file")
-        print(f"The following {len(assets_to_delete)} files would be deleted:\n")
+        logging.info(f"DRY RUN MODE - {len(assets_to_delete)} files would be deleted")
+        logging.info(f"To actually delete files, set DRY_RUN=false in your .env file")
+        logging.info(f"The following {len(assets_to_delete)} files would be deleted:\n")
         return
     else:
-        print("\n*** WARNING: This will permanently delete files ***")
-        confirm = input("Are you sure you want to continue? (yes/no): ")
-        if confirm.lower() != 'yes':
-            print("Cancelled by user")
-            return
+        logging.info("\n*** WARNING: This will permanently delete files ***")
+        if not SKIP_CONFIRMATION:
+            confirm = input("Are you sure you want to continue? (yes/no): ")
+            if confirm.lower() != 'yes':
+                logging.info("Cancelled by user")
+                logging.info("Execution cancelled by user")
+                return
+        else:
+            logging.info("Skipping user confirmation (SKIP_CONFIRMATION=true)")
+            logging.info("Proceeding with deletion (confirmation skipped for automated execution)...")
         
         # Initialize API for actual deletion
         api = ImmichAPI(IMMICH_BASE_URL, IMMICH_API_KEY)
@@ -327,16 +381,16 @@ def main():
         
         for i in range(0, len(assets_to_delete), batch_size):
             batch = assets_to_delete[i:i + batch_size]
-            print(f"Deleting batch {i//batch_size + 1} ({len(batch)} assets)...")
+            logging.info(f"Deleting batch {i//batch_size + 1} ({len(batch)} assets)...")
             
             if api.delete_assets(batch):
                 total_deleted += len(batch)
-                print(f"Successfully deleted {len(batch)} assets")
+                logging.info(f"Successfully deleted {len(batch)} assets")
             else:
-                print(f"Failed to delete batch {i//batch_size + 1}")
+                logging.info(f"Failed to delete batch {i//batch_size + 1}")
                 break
         
-        print(f"\nCompleted: {total_deleted} assets deleted")
+        logging.info(f"Completed: {total_deleted} assets deleted")
 
 
 if __name__ == "__main__":

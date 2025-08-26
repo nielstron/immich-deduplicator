@@ -1,0 +1,17 @@
+[Unit]
+Description=Immich WhatsApp Duplicate Cleaner
+After=network.target
+
+[Service]
+Type=oneshot
+User=user
+Group=user
+WorkingDirectory=.../immich-deduplication
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 .../immich-deduplication/delete_duplicates.py --execute --skip-confirmation
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
