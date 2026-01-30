@@ -151,8 +151,9 @@ def is_whatsapp_asset(asset: Dict[str, Any]) -> bool:
     whatsapp_indicators = [
         'whatsapp images',
         #'wa0',
-        '/sent/',
-        #'img-', 
+        'whatsapp/sent/',
+        'whatsapp/private/',
+        #'img-',
         #'-wa0'
     ]
     
@@ -184,8 +185,7 @@ def find_whatsapp_duplicates_to_delete(duplicates: List[Dict[str, Any]]) -> tupl
         for asset in assets:
             if is_whatsapp_asset(asset):
                 whatsapp_assets.append(asset)
-            else:
-                non_whatsapp_assets.append(asset)
+            non_whatsapp_assets.append(asset)
         
         # Only delete WhatsApp assets if there are non-WhatsApp versions available
         # AND the WhatsApp version is smaller (compressed)
@@ -199,6 +199,8 @@ def find_whatsapp_duplicates_to_delete(duplicates: List[Dict[str, Any]]) -> tupl
                 largest_original_name = ""
                 
                 for orig_asset in non_whatsapp_assets:
+                    if orig_asset['originalFileName'] == wa_asset["originalFileName"]:
+                        continue
                     orig_file_size = orig_asset.get('exifInfo', {}).get('fileSizeInByte', 0)
                     if orig_file_size > wa_file_size:
                         has_larger_original = True
