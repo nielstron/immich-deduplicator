@@ -39,16 +39,16 @@ FORCE_REFRESH=false
 
 ```bash
 # Run using env config (default behavior)
-python delete_whatsapp_duplicates.py
+python delete_duplicates.py
 
 # Force refresh from API (ignores 24-hour cache)
-python delete_whatsapp_duplicates.py --refresh
+python delete_duplicates.py --refresh
 
 # Use local file only (don't use API)
-python delete_whatsapp_duplicates.py --no-api
+python delete_duplicates.py --no-api
 
 # Actually delete files (disable dry-run)
-python delete_whatsapp_duplicates.py --execute
+python delete_duplicates.py --execute
 ```
 
 ### Caching Behavior
